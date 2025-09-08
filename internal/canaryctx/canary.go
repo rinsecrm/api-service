@@ -57,7 +57,7 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// UnaryClientInterceptor adds x-canary to outgoing gRPC metadata
+// UnaryClientInterceptor adds X-Canary to outgoing gRPC metadata
 func UnaryClientInterceptor() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if canary, ok := FromContext(ctx); ok {

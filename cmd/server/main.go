@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,16 +12,29 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/your-org/api-service/internal/canaryctx"
-	"github.com/your-org/api-service/internal/client"
-	"github.com/your-org/api-service/internal/server"
+	"github.com/rinsecrm/api-service/internal/canaryctx"
+	"github.com/rinsecrm/api-service/internal/client"
+	"github.com/rinsecrm/api-service/internal/metrics"
+	"github.com/rinsecrm/api-service/internal/server"
+	"github.com/rinsecrm/api-service/internal/tracing"
 )
 
 func main() {
 	// Get configuration from environment
 	port := getEnvOrDefault("PORT", "8080")
 	storeServiceAddr := getEnvOrDefault("STORE_SERVICE_ADDR", "store-service:8080")
+	tempoHost := getEnvOrDefault("TEMPO_HOST", "")
+
+	// Initialize tracing
+	if err := tracing.Start(tracing.Config{
+		ServiceName: "api-service",
+		TempoHost:   tempoHost,
+		Version:     "dev",
+	}); err != nil {
+		log.Printf("Failed to initialize tracing: %v", err)
+	}
 
 	// Initialize store client
 	storeClient, err := client.NewStoreClient(storeServiceAddr)
@@ -47,6 +61,9 @@ func main() {
 	// Health check
 	r.HandleFunc("/health", srv.HealthCheck).Methods("GET")
 
+	// Metrics endpoint
+	r.Handle("/metrics", metrics.MetricsHandler()).Methods("GET")
+
 	// Setup CORS with X-Canary header support
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"}, // Configure this properly for production
@@ -56,8 +73,14 @@ func main() {
 		AllowCredentials: true,
 	})
 
-	// Apply middleware
-	handler := c.Handler(canaryctx.HTTPMiddleware(r))
+	// Apply middleware with tracing
+	handler := c.Handler(otelhttp.NewHandler(
+		metrics.HTTPMiddleware(canaryctx.HTTPMiddleware(r)),
+		"api-service",
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+		}),
+	))
 
 	// Create HTTP server
 	httpServer := &http.Server{
@@ -84,6 +107,11 @@ func main() {
 	// Give outstanding requests 30 seconds to finish
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Shutdown tracing
+	if err := tracing.Stop(ctx); err != nil {
+		log.Printf("Failed to shutdown tracing: %v", err)
+	}
 
 	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)

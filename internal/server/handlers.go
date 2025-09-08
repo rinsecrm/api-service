@@ -8,8 +8,10 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/your-org/api-service/internal/canaryctx"
-	"github.com/your-org/api-service/internal/client"
+	"github.com/rinsecrm/api-service/internal/canaryctx"
+	"github.com/rinsecrm/api-service/internal/client"
+	"github.com/rinsecrm/api-service/internal/metrics"
+	"github.com/rinsecrm/api-service/internal/tracing"
 )
 
 type Server struct {
@@ -76,6 +78,10 @@ type ErrorResponse struct {
 }
 
 func (s *Server) CreateItem(w http.ResponseWriter, r *http.Request) {
+	// Start custom span for business logic
+	ctx, span := tracing.StartSpan(r.Context(), "api.create_item")
+	defer span.End()
+
 	// Log canary context for observability
 	if canary, ok := canaryctx.FromContext(r.Context()); ok {
 		log.Printf("CreateItem called with canary PR: %s", canary)
@@ -97,7 +103,7 @@ func (s *Server) CreateItem(w http.ResponseWriter, r *http.Request) {
 	category := stringToCategory(req.Category)
 
 	item, err := s.storeClient.CreateItem(
-		r.Context(),
+		ctx,
 		tenantID,
 		req.Name,
 		req.Description,
@@ -116,12 +122,19 @@ func (s *Server) CreateItem(w http.ResponseWriter, r *http.Request) {
 
 	response := protoItemToResponse(item)
 
+	// Record business metrics
+	metrics.RecordItemCreated()
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) GetItem(w http.ResponseWriter, r *http.Request) {
+	// Start custom span for business logic
+	ctx, span := tracing.StartSpan(r.Context(), "api.get_item")
+	defer span.End()
+
 	if canary, ok := canaryctx.FromContext(r.Context()); ok {
 		log.Printf("GetItem called with canary PR: %s", canary)
 	}
@@ -130,7 +143,7 @@ func (s *Server) GetItem(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	tenantID := getTenantIDFromRequest(r)
 
-	item, err := s.storeClient.GetItem(r.Context(), tenantID, id)
+	item, err := s.storeClient.GetItem(ctx, tenantID, id)
 	if err != nil {
 		log.Printf("Error getting item: %v", err)
 		writeErrorResponse(w, "Item not found", http.StatusNotFound)
@@ -139,11 +152,18 @@ func (s *Server) GetItem(w http.ResponseWriter, r *http.Request) {
 
 	response := protoItemToResponse(item)
 
+	// Record business metrics
+	metrics.RecordItemRetrieved()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) UpdateItem(w http.ResponseWriter, r *http.Request) {
+	// Start custom span for business logic
+	ctx, span := tracing.StartSpan(r.Context(), "api.update_item")
+	defer span.End()
+
 	if canary, ok := canaryctx.FromContext(r.Context()); ok {
 		log.Printf("UpdateItem called with canary PR: %s", canary)
 	}
@@ -168,7 +188,7 @@ func (s *Server) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	status := stringToStatus(req.Status)
 
 	item, err := s.storeClient.UpdateItem(
-		r.Context(),
+		ctx,
 		tenantID,
 		id,
 		req.Name,
@@ -189,11 +209,18 @@ func (s *Server) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 	response := protoItemToResponse(item)
 
+	// Record business metrics
+	metrics.RecordItemUpdated()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	// Start custom span for business logic
+	ctx, span := tracing.StartSpan(r.Context(), "api.delete_item")
+	defer span.End()
+
 	if canary, ok := canaryctx.FromContext(r.Context()); ok {
 		log.Printf("DeleteItem called with canary PR: %s", canary)
 	}
@@ -202,7 +229,7 @@ func (s *Server) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	tenantID := getTenantIDFromRequest(r)
 
-	success, err := s.storeClient.DeleteItem(r.Context(), tenantID, id)
+	success, err := s.storeClient.DeleteItem(ctx, tenantID, id)
 	if err != nil {
 		log.Printf("Error deleting item: %v", err)
 		writeErrorResponse(w, "Failed to delete item", http.StatusInternalServerError)
@@ -213,6 +240,9 @@ func (s *Server) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, "Item not found", http.StatusNotFound)
 		return
 	}
+
+	// Record business metrics
+	metrics.RecordItemDeleted()
 
 	w.WriteHeader(http.StatusNoContent)
 }

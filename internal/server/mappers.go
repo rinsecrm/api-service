@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	pb "github.com/your-org/api-service/proto"
+	pb "github.com/rinsecrm/api-service/proto"
 )
 
 // Helper functions for converting between HTTP request/response and proto types
