@@ -71,6 +71,7 @@ type InventoryUpdateRequest struct {
 type ListResponse struct {
 	Items         []ItemResponse `json:"items"`
 	NextPageToken string         `json:"next_page_token,omitempty"`
+	TotalCount    int32          `json:"total_count"`
 }
 
 type ErrorResponse struct {
@@ -281,6 +282,7 @@ func (s *Server) ListItems(w http.ResponseWriter, r *http.Request) {
 	response := ListResponse{
 		Items:         responseItems,
 		NextPageToken: nextPageToken,
+		TotalCount:    totalCount,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

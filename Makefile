@@ -1,4 +1,4 @@
-.PHONY: help build run test clean proto docker-build docker-run docker-stop
+.PHONY: help build run test clean docker-build docker-run docker-stop
 
 # Default target
 help:
@@ -29,7 +29,6 @@ help:
 	@echo "  docker-stop     - Stop DynamoDB"
 	@echo ""
 	@echo "📋 Utilities:"
-	@echo "  proto        - Generate protobuf code"
 	@echo "  env-status   - Check all environment statuses"
 	@echo "  cleanup-orphans - Clean up orphaned containers and networks"
 
@@ -37,7 +36,7 @@ help:
 build:
 	@echo "Building HTTP API server..."
 	@mkdir -p bin
-	go build -o bin/api-service ./cmd/server
+	go build -o bin/api-service .
 
 # Build the server with version information for CI
 build-ci:
@@ -45,10 +44,10 @@ build-ci:
 	@mkdir -p bin
 	@if [ -n "$(VERSION)" ] && [ -n "$(COMMIT)" ]; then \
 		echo "Building with version: $(VERSION)-$(COMMIT)"; \
-		go build -ldflags="-X main.version=$(VERSION) -X main.buildCommit=$(COMMIT) -X main.buildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/api-service ./cmd/server; \
+		go build -ldflags="-X main.version=$(VERSION) -X main.buildCommit=$(COMMIT) -X main.buildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/api-service .; \
 	else \
 		echo "Building without version info (use VERSION and COMMIT env vars)"; \
-		go build -o bin/api-service ./cmd/server; \
+		go build -o bin/api-service .; \
 	fi
 
 # Run the server locally (requires DynamoDB to be running)
@@ -125,12 +124,6 @@ clean:
 	rm -rf bin/
 	go clean
 
-# Generate protobuf code
-proto:
-	@echo "Generating protobuf code..."
-	protoc --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/store.proto
 
 # Build Docker image (includes code building)
 docker-build:

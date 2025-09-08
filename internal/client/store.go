@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/rinsecrm/api-service/internal/canaryctx"
-	pb "github.com/rinsecrm/api-service/proto"
+	pb "github.com/rinsecrm/api-service/proto/go"
 )
 
 type StoreClient struct {
